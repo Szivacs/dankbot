@@ -6,6 +6,7 @@ import * as fs from 'fs';
 export class CommandService{
 
     commands : Array<Command>;
+    lastCommandTime : number;
 
     constructor(){
         this.commands = new Array();
@@ -22,6 +23,7 @@ export class CommandService{
                 this.commands.push(cmd);
             }
         }
+        this.lastCommandTime = Date.now();
     }
 
     async handleMessage(msg : Discord.Message, content : string) {
@@ -68,6 +70,7 @@ export class CommandService{
                 console.log(`[COMMAND] "${content}" requested by <@${msg.author.username}:${msg.author.id}> in <#${(msg.channel as Discord.TextChannel).name}:${msg.channel.id}>`);
                 try{
                     command.run(msg, props).then(() => msg.channel.stopTyping());
+                    this.lastCommandTime = Date.now();
                 }catch(e){
                     msg.channel.stopTyping();
                     console.error(e);

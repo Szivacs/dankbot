@@ -1,3 +1,5 @@
 {
-    "prefixes": ["d!", "?"]
+    "prefixes": ["d!", "?"],
+    "timeBeforeSleep": 10800000,
+    "heartbeatTimer": 1200000
 }
