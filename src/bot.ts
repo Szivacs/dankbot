@@ -10,6 +10,7 @@ export class DankBot extends Discord.Client{
 
     commands : CommandService;
     settings : {[key : string] : any}
+    goingToSleep = false;
 
     constructor(options? : Discord.ClientOptions){
         super(options);
@@ -28,16 +29,13 @@ export class DankBot extends Discord.Client{
                 let time = Date.now();
                 if(time - this.commands.lastCommandTime < this.settings.timeBeforeSleep){
                     console.log("[HEARTBEAT] Sending signal to server...");
-                    try{
-                        await fetch("https://discorddankbot.herokuapp.com/");
-                        console.log("[HEARTBEAT] Staying awake");
-                    }catch(e){
-                        console.error(e);
-                    }
+                    fetch("https://discorddankbot.herokuapp.com/");
+                    console.log("[HEARTBEAT] Staying awake");
                 }else{
                     console.log("[HEARTBEAT] Going to sleep shortly...");
                     this.user.setStatus("idle");
                     this.user.setActivity("the 🌇", { type: 'WATCHING' });
+                    this.goingToSleep = true;
                 }
             }, this.settings.heartbeatTimer);
         });

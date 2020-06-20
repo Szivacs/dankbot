@@ -2,6 +2,7 @@ import Discord from 'discord.js'
 import Validation from '../util/validation'
 import Format from '../util/format'
 import * as fs from 'fs';
+import { dankbot } from '../bot';
 
 export class CommandService{
 
@@ -71,6 +72,13 @@ export class CommandService{
                 try{
                     command.run(msg, props).then(() => msg.channel.stopTyping());
                     this.lastCommandTime = Date.now();
+                    if(dankbot.goingToSleep){
+                        fetch("https://discorddankbot.herokuapp.com/");
+                        console.log("[HEARTBEAT] Staying awake");
+                        dankbot.user.setStatus("online");
+                        dankbot.user.setActivity("with a 🐌", {type: "PLAYING"});
+                        dankbot.goingToSleep = false;
+                    }
                 }catch(e){
                     msg.channel.stopTyping();
                     console.error(e);
