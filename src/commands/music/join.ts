@@ -9,8 +9,8 @@ export default class JoinCommand implements Command{
     description = "Connect to the voice channel";
     args = [
         {
-            name: "channel",
-            description: "The channel to connect to",
+            name: "user",
+            description: "The user to connect to",
             optional: true,
             continous: false,
             isValid: Validation.isStringUser,

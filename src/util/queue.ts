@@ -1,3 +1,5 @@
+import { thomsonCrossSectionDependencies } from "mathjs";
+
 export default class Queue<T>{
     data : Array<T>;
     length : number;
@@ -10,6 +12,10 @@ export default class Queue<T>{
     push(value : T){
         this.data.push(value);
         this.length++;
+    }
+    pushArray(arr : Array<T>){
+        this.data = this.data.concat(arr);
+        this.length += arr.length;
     }
 
     pop() : T{

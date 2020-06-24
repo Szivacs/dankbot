@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap');
+*{
+    margin: 0;
+    padding: 0;
+    font-family: "Roboto", sans-serif;
+    color: white;
+}
+
+:root{
+    --color-background: #36393F;
+    --color-input-background: #313339;
+    --color-input-border: #222428;
+    --color-button-background: #7289da;
+}
+
+body{
+    background-color: var(--color-background);
+    padding: 100px;
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+h1{
+    font-weight: normal;
+    font-size: 24px;
+    margin-bottom: 30px;
+}
+
+.hv-center{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.command{
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: 100%;
+}
+.command .input{
+    flex-grow: 2;
+    display: flex;
+    align-items: center;
+    background-color: var(--color-input-background);
+    border: 1px solid var(--color-input-border);
+    height: 50px;
+    border-radius: 5px;
+    margin-right: 20px;
+}
+.command .input .prefix{
+    padding: 0 20px;
+    font-size: 18px;
+    opacity: 0.5;
+    user-select: none;
+}
+.command .input .cmd{
+    background: transparent;
+    border: 0;
+    height: 50px;
+    width: 100%;
+    font-size: 18px;
+    font-family: "Roboto", sans-serif;
+}
+.command .inputfield{
+    position: relative;
+    flex-grow: 2;
+}
+.command .input .hint{
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    user-select: none;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.selection{
+    display: flex;
+    align-items: center;
+    padding-left: 20px;
+    border-left: 1px solid var(--color-input-border);
+    width: 250px;
+}
+.selection label,
+.selection i{
+    font-size: 24px;
+    opacity: 0.5;
+    margin-right: 10px;
+    pointer-events: none;
+    user-select: none;
+}
+.selection select{
+    background: transparent;
+    border: 0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    height: 50px;
+    width: 100%;
+    font-size: 18px;
+}
+.selection select option{
+    padding: 10px;
+}
+
+button{
+    background-color: var(--color-button-background);
+    border: 0;
+    border-radius: 3px;
+    padding: 17 25;
+    cursor: pointer;
+    font-weight: 500;
+}

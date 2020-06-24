@@ -6,11 +6,11 @@ import { dankbot } from '../bot';
 
 export class CommandService{
 
-    commands : Array<Command>;
+    commands : Map<string, Command>;
     lastCommandTime : number;
 
     constructor(){
-        this.commands = new Array();
+        this.commands = new Map();
         for(let dir of fs.readdirSync("./src/commands/")){
             for(let file of fs.readdirSync("./src/commands/"+dir+"/")){
                 const cls = require("../commands/"+dir+"/"+file).default;
@@ -21,7 +21,10 @@ export class CommandService{
                     cmd.category = dir;
                 if(cmd.args == null)
                     cmd.args = new Array();
-                this.commands.push(cmd);
+
+                this.commands.set(cmd.command, cmd);
+                for(let alias of cmd.aliases)
+                    this.commands.set(alias, cmd);
             }
         }
         this.lastCommandTime = Date.now();
@@ -33,59 +36,55 @@ export class CommandService{
             this.printLongUsage(msg, props.args[0]);
             return;
         }
-        for(let command of this.commands){
-            if(command.command === props.command || command.aliases.includes(props.command)){
-                for(let i = 0; i < command.args.length; i++){
-                    let arg = command.args[i];
-                    if(i >= props.args.length){
-                        if(!arg.optional){
-                            if(command.invalid != null)
-                                command.invalid(msg, `Too few arguments`);
-                            msg.channel.send(`:interrobang: Invalid command: Too few arguments\nUsage: ${this.getShortUsage(command)}`);
-                            return;
-                        }
-                        props.args.push(null);
-                        continue;
+        let command = this.commands.get(props.command);
+        if(command != null){
+            for(let i = 0; i < command.args.length; i++){
+                let arg = command.args[i];
+                if(i >= props.args.length){
+                    if(!arg.optional){
+                        if(command.invalid != null)
+                            command.invalid(msg, `Too few arguments`);
+                        msg.channel.send(`:interrobang: Invalid command: Too few arguments\nUsage: ${this.getShortUsage(command)}`);
+                        return;
                     }
-                    if(arg.continous){
-                        for(let j = i+1; j < props.args.length; j++){
-                            props.args[i] += " " + props.args[j];
-                        }
-                        props.args.splice(i+1, props.args.length - i - 1);
+                    props.args.push(null);
+                    continue;
+                }
+                if(arg.continous){
+                    for(let j = i+1; j < props.args.length; j++){
+                        props.args[i] += " " + props.args[j];
+                    }
+                    props.args.splice(i+1, props.args.length - i - 1);
+                }else{
+                    let valid = true;
+                    if(arg.isValid != null)
+                        valid = arg.isValid(props.args[i]);
+                    if(valid){
+                        if(arg.validate != null)
+                            props.args[i] = arg.validate(props.args[i]);
                     }else{
-                        let valid = true;
-                        if(arg.isValid != null)
-                            valid = arg.isValid(props.args[i]);
-                        if(valid){
-                            if(arg.validate != null)
-                                props.args[i] = arg.validate(props.args[i]);
-                        }else{
-                            if(command.invalid != null)
-                                command.invalid(msg, `Argument ${i+1} (${props.args[i]}) is not valid`);
-                            msg.channel.send(`:interrobang: Invalid command: Argument ${i+1} (${props.args[i]}) is not valid!`);
-                            return;
-                        }
+                        if(command.invalid != null)
+                            command.invalid(msg, `Argument ${i+1} (${props.args[i]}) is not valid`);
+                        msg.channel.send(`:interrobang: Invalid command: Argument ${i+1} (${props.args[i]}) is not valid!`);
+                        return;
                     }
                 }
-                msg.channel.startTyping();
-                console.log(`[COMMAND] "${content}" requested by <@${msg.author.username}:${msg.author.id}> in <#${(msg.channel as Discord.TextChannel).name}:${msg.channel.id}>`);
-                try{
-                    command.run(msg, props).then(() => msg.channel.stopTyping());
-                    this.lastCommandTime = Date.now();
-                    if(dankbot.goingToSleep){
-                        fetch("https://discorddankbot.herokuapp.com/");
-                        console.log("[HEARTBEAT] Staying awake");
-                        dankbot.user.setStatus("online");
-                        dankbot.user.setActivity("with a 🐌", {type: "PLAYING"});
-                        dankbot.goingToSleep = false;
-                    }
-                }catch(e){
-                    msg.channel.stopTyping();
-                    console.error(e);
-                }
-                break;
             }
-        }
+            console.log(`[COMMAND] "${content}" requested by <@${msg.author.username}:${msg.author.id}> in <#${(msg.channel as Discord.TextChannel).name}:${msg.channel.id}>`);
+            try{
+                command.run(msg, props).then(() => msg.channel.stopTyping());
+                this.lastCommandTime = Date.now();
+                if(dankbot.goingToSleep){
+                    fetch("https://discorddankbot.herokuapp.com/");
+                    console.log("[HEARTBEAT] Staying awake");
+                    dankbot.user.setStatus("online");
+                    dankbot.user.setActivity("with a 🐌", {type: "PLAYING"});
+                    dankbot.goingToSleep = false;
+                }
+            }catch(e){
+                console.error(e);
+            }
+        }   
     }
 
     parse(str : string) : CommandProperties {
@@ -122,57 +121,56 @@ export class CommandService{
     }
 
     printLongUsage(msg : Discord.Message, cmd : string){
-        for(let command of this.commands){
-            if(command.command === cmd || command.aliases.includes(cmd)){
-                let embed = {
-                    title: this.getShortUsage(command),
-                    description: command.description,
-                    author: {
-                        name: "Usage / Manual"
-                    },
-                    fields: [
-                        {
-                            name: "Aliases",
-                            value: `${command.aliases.length == 0 ? `None` : command.aliases.join(", ")}`,
-                            inline: false
-                        },
-                        {
-                            name: "Category",
-                            value: `${Format.capitalize(command.category)}${command.args.length > 0 ? `\n\nArguments:` : ``}`,
-                            inline: false
-                        }
-                    ]
-                };
-
-                if(command.args.length > 0){
-                    embed.fields.push({
-                        name: "Argument",
-                        value: "",
-                        inline: true
+        let command = this.commands.get(cmd);
+        if(command != null){
+            let embed = {
+                title: this.getShortUsage(command),
+                description: command.description,
+                author: {
+                    name: "Usage / Manual"
+                },
+                fields: [
+                    {
+                        name: "Aliases",
+                        value: `${command.aliases.length == 0 ? `None` : command.aliases.join(", ")}`,
+                        inline: false
                     },
                     {
-                        name: "Optional",
-                        value: "",
-                        inline: true
-                    },
-                    {
-                        name: "Continous",
-                        value: "",
-                        inline: true
-                    });
-                    for(let arg of command.args){
-                        embed.fields[2].value += `${arg.name}\n${arg.description}\n\n`;
-                        embed.fields[3].value += `${arg.optional ? `Yes` : `No`}\n\n\n`;
-                        embed.fields[4].value += `${arg.continous ? `Yes` : `No`}\n\n\n`;
+                        name: "Category",
+                        value: `${Format.capitalize(command.category)}${command.args.length > 0 ? `\n\nArguments:` : ``}`,
+                        inline: false
                     }
-                }
+                ]
+            };
 
-                msg.channel.send("", {
-                    embed
+            if(command.args.length > 0){
+                embed.fields.push({
+                    name: "Argument",
+                    value: "",
+                    inline: true
+                },
+                {
+                    name: "Optional",
+                    value: "",
+                    inline: true
+                },
+                {
+                    name: "Continous",
+                    value: "",
+                    inline: true
                 });
-
-                return;
+                for(let arg of command.args){
+                    embed.fields[2].value += `${arg.name}\n${arg.description}\n\n`;
+                    embed.fields[3].value += `${arg.optional ? `Yes` : `No`}\n\n\n`;
+                    embed.fields[4].value += `${arg.continous ? `Yes` : `No`}\n\n\n`;
+                }
             }
+
+            msg.channel.send("", {
+                embed
+            });
+
+            return;
         }
     }
 }

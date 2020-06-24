@@ -6,8 +6,11 @@ import Delegate from '../util/delegate';
 import { dankbot } from '../bot'
 import Format from '../util/format';
 import * as fs from 'fs'
+import Diagnostics from '../util/diagnostics'
+import * as Util from '../util/util'
 
 const ytsr = require('ytsr');
+const ytpl = require('ytpl');
 
 export interface Song{
     title : string;
@@ -20,11 +23,13 @@ export interface Song{
 }
 
 export class MusicService {
-    static async getSongFromYoutube(url : string) : Promise<Song> {
+    static async getSongInfo(url : string) : Promise<Song> {
         try{
+            Diagnostics.begin("music:get");
             console.log(`[MUSIC] Loading song info for '${url}'`);
             let info = await ytdl.getBasicInfo(url);
             console.log(`[MUSIC] Found info for '${url}'`);
+            Diagnostics.end();
             return Promise.resolve({
                 title: (info.media.song == null) ? info.title : info.media.song,
                 author: (info.media.artist == null) ? info.author.name : info.media.artist,
@@ -41,6 +46,7 @@ export class MusicService {
 
     static async search(query : string) : Promise<Song> {
         try{
+            Diagnostics.begin("music:search");
             console.log(`[MUSIC] Searching for '${query}'`);
             let filters = await ytsr.getFilters(query);
             let filter = filters.get('Type').find((o : any) => o.name === 'Video');
@@ -54,6 +60,7 @@ export class MusicService {
                 return Promise.reject(new Error("No sources found"));
 
             console.log(`[MUSIC] Found song for '${query}'`);
+            Diagnostics.end();
             return Promise.resolve({
                 title: info.items[0].title,
                 author: info.items[0].author.name,
@@ -68,14 +75,68 @@ export class MusicService {
         }
     }
 
-    static async updateSong(song : Song) : Promise<void> {
+    static async updateSongInfo(song : Song) : Promise<void> {
         try{
+            Diagnostics.begin("music:update");
             console.log(`[MUSIC] Updating song info for '${song.src[0]}'`);
             let info = await ytdl.getBasicInfo(song.src[0]);
             console.log(`[MUSIC] Found info for '${song.src[0]}'`);
             song.title = (info.media.song == null) ? info.title : info.media.song;
             song.author = (info.media.artist == null) ? info.author.name : info.media.artist;
+            Diagnostics.end();
             return Promise.resolve();
+        }catch(e){
+            return Promise.reject(e);
+        }
+    }
+
+    static async getSongsFromPlaylist(url : string) : Promise<Array<Song>> {
+        try{
+            Diagnostics.begin("music:playlist");
+            console.log(`[MUSIC] Loading playlist from '${url}'`);
+            let info = await ytpl(url, {limit: Infinity});
+            console.log(`[MUSIC] Songs loaded from '${url}'`);
+            let songs : Array<Song> = new Array();
+            for(let item of info.items){
+                songs.push({
+                    title: item.title,
+                    author: item.author.name,
+                    playlist: info.title,
+                    src: [item.url_simple],
+                    img: item.thumbnail,
+                    offset: 0,
+                    length: Validation.getSecondsFromHHMMSS(item.duration)
+                });
+            }
+            Diagnostics.end();
+            return Promise.resolve(songs);
+        }catch(e){
+            return Promise.reject(e);
+        }
+    }
+
+    static async getRelatedSongs(song : Song) : Promise<Array<Song>> {
+        try{
+            Diagnostics.begin("music:autoplay");
+            console.log(`[MUSIC] Loading related songs to '${song.src[0]}'`);
+            let info = await ytdl.getInfo(song.src[0]);
+            console.log(`[MUSIC] Loaded related songs to '${song.src[0]}'`);
+            let songs : Array<Song> = new Array();
+            for(let item of info.related_videos){
+                songs.push({
+                    title: item.title,
+                    author: item.author,
+                    playlist: `Related to ${song.title}`,
+                    src: [`https://youtu.be/${item.id}`],
+                    //@ts-ignore
+                    img: item.video_thumbnail,
+                    offset: 0,
+                    length: parseInt(item.length_seconds)
+                });
+            }
+            songs = Util.shuffle(songs);
+            Diagnostics.end();
+            return Promise.resolve(songs);
         }catch(e){
             return Promise.reject(e);
         }
@@ -93,6 +154,7 @@ export class MusicPlayer {
     static savedQueue : Queue<Song>;
     static playing = false;
     static looping = false;
+    static autoplaying = false;
     static currentSong : Song;
     static stream : Discord.StreamDispatcher;
 
@@ -117,6 +179,7 @@ export class MusicPlayer {
             this.currentSong = null;
             this.playing = false;
             this.looping = false;
+            this.autoplaying = false;
             console.log(`[MUSIC] Connected to voice channel <${vc.name}:${vc.id}>`);
             return Promise.resolve();
         }catch(e){
@@ -131,7 +194,8 @@ export class MusicPlayer {
         this.stop();
         this.playing = false;
         this.looping = false;
-        this.stream.destroy();
+        if(this.stream != null)
+            this.stream.destroy();
         this.queue.clear();
         this.recentSongs.splice(0, this.recentSongs.length);
         this.currentSong = null;
@@ -162,13 +226,16 @@ export class MusicPlayer {
 
         let songs = new Array();
         if(Validation.isStringURL(str)){
-            if(ytdl.validateURL(str)){
-                let song = await MusicService.getSongFromYoutube(str);
+            if(ytpl.validateURL(str)){
+                songs = await MusicService.getSongsFromPlaylist(str);
+            }
+            else if(ytdl.validateURL(str)){
+                let song = await MusicService.getSongInfo(str);
                 songs.push(song);
             }
         }else{
             let song = await MusicService.search(str);
-            MusicService.updateSong(song);
+            MusicService.updateSongInfo(song);
             songs.push(song);
         }
 
@@ -203,10 +270,11 @@ export class MusicPlayer {
                 song.src.shift();
                 this.queue.pushFront(song);
             }
+            this.next();
         });
 
         console.log(`[MUSIC] Playing '${song.title}' from '${song.src[0]}'`);
-        dankbot.user.setActivity(song.author + " " + song.title, { type: 'PLAYING' });
+        dankbot.user.setActivity(`${song.title} by ${song.author}`, { type: 'PLAYING' });
         if(song.length > 0)
             this.printSong(song, this.tc);
     }
@@ -223,13 +291,19 @@ export class MusicPlayer {
             this.next();
     }
     static next() {
-        this.stop();
+        if(this.playing)
+            this.stop();
         this.playing = false;
 
         if(this.looping == false){
             this.currentSong = this.queue.pop();
-            if(this.currentSong != null && this.currentSong.length != 0 && this.currentSong.offset == 0)
+            if(this.currentSong != null && this.currentSong.length != 0 && this.currentSong.offset == 0){
                 this.recentSongs.push(this.currentSong);
+
+                if(this.autoplaying && this.queue.length == 0){
+                    MusicService.getRelatedSongs(this.currentSong).then((songs) => this.queue.pushArray(songs));
+                }
+            }
         }
 
         if(this.currentSong != null){
@@ -250,7 +324,10 @@ export class MusicPlayer {
             this.tc.send(`:notes: Skipped ${nr} songs.`);
         console.log(`[MUSIC] ${nr} songs skipped`);
 
-        this.next();
+        if(this.playing)
+            this.stop();
+        else
+            this.next();
     }
     static pause(){
         if(this.playing == null) return;
@@ -263,12 +340,27 @@ export class MusicPlayer {
         this.tc.send(":notes: Song resumed.");
     }
     static setLoop(state : boolean = true){
+        if(this.tc == null) return;
         if(state){
             this.looping = true;
             this.tc.send(":notes: Looping enabled");
         }else{
             this.looping = false;
             this.tc.send(":notes: Looping disabled");
+        }
+    }
+    static setAutoplay(state : boolean = true){
+        if(this.tc == null) return;
+        if(state){
+            this.autoplaying = true;
+            this.tc.send(":notes: Autoplay enabled");
+
+            if(this.currentSong != null && this.currentSong.length > 0 && this.queue.length == 0){
+                MusicService.getRelatedSongs(this.currentSong).then((songs) => this.queue.pushArray(songs));
+            }
+        }else{
+            this.autoplaying = false;
+            this.tc.send(":notes: Autoplay disabled");
         }
     }
     static seek(seconds : number){
@@ -324,9 +416,7 @@ export class MusicPlayer {
                 }
             ],
             author: {
-                name: "Now playling",
-                url: "",
-                icon_url: ""
+                name: "Now playling"
             }
         };
 
@@ -342,7 +432,7 @@ export class MusicPlayer {
             embed.fields.push({
                 name: "Playlist",
                 value: song.playlist,
-                inline: true
+                inline: false
             });
         }
 
@@ -369,5 +459,64 @@ export class MusicPlayer {
                 files: ["./.temp/queue.txt"]
             });
         });
+    }
+
+    static async printQueue(page : number = 1){
+        if(this.playing == false || this.currentSong == null || this.tc == null) return;
+
+        let embed = this.getQueueEmbed(page-1);
+        
+        let msg = await this.tc.send("", { embed });
+        await msg.react('◀');
+        await msg.react('▶');
+        const filter = (reaction : Discord.MessageReaction, user : Discord.User) => {
+            return user.bot == false;
+        };
+        let rc = msg.createReactionCollector(filter);
+        rc.on("collect", async (r) => {
+            let maxPages = Math.ceil(this.queue.length / 10);
+            if(r.emoji.name == '◀') page--;
+            if(r.emoji.name == '▶') page++;
+            if(page > maxPages) page = 1;
+            if(page < 1) page = maxPages;
+            embed = this.getQueueEmbed(page-1);
+            await msg.edit("", { embed });
+            msg.reactions.removeAll();
+            await msg.react('◀');
+            await msg.react('▶');
+        });
+    }
+
+    static getQueueEmbed(page : number = 1) : Discord.MessageEmbed {
+        let embed = {
+            title: `:notes: ${this.currentSong.title}`,
+            description: `${this.currentSong.author} • ${Format.secondsToHHMMSS(this.currentSong.length)}\n\n**Next up:**`,
+            url: this.currentSong.src[0],
+            color: 4693480,
+            author: {
+                name: "Now playing"
+            },
+            footer: {
+                text: ""
+            }
+        };
+        if(this.queue.length == 0){
+            embed.description += "\nThere are no songs in the queue right now.";
+        }else{
+            let totalSeconds = this.currentSong.length;
+            if(page * 10 >= this.queue.length) page = 0;
+            for(let i = page * 10; i < Math.min(page * 10 + 10, this.queue.length); i++){
+                let song = this.queue.data[i];
+                if(song.length == 0 || song.offset > 0) continue;
+                embed.description += `\n:notes: **${song.title}** • ${song.author} • ${Format.secondsToHHMMSS(song.length)}`;
+                totalSeconds += song.length;
+            }
+            if(this.queue.length > page * 10 + 10)
+                embed.description += `\n\nThere are ${this.queue.length-(page * 10 + 10)} more songs in the playlist.`;
+
+            if(totalSeconds > 0)
+                embed.footer.text = `${this.queue.length+1} songs • ${Format.secondsToxhxmxs(totalSeconds)}` + ((this.queue.length / 10 > 1) ? ` • ${page+1}/${Math.ceil(this.queue.length / 10)}`: ``);
+        }
+        return new Discord.MessageEmbed(embed);
     }
 }

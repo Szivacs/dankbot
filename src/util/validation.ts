@@ -31,7 +31,7 @@ export default class Validation{
     }
     static isNumberAndPositive(str : string) : boolean {
         let x = parseInt(str);
-        return this.isNumber(str) && x > 0;
+        return Validation.isNumber(str) && x > 0;
     }
     static validateNumber(str : string) : number {
         return parseInt(str);

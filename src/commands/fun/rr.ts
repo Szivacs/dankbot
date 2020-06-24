@@ -16,7 +16,7 @@ export default class RussianRouletteCommand implements Command{
 
     constructor(){
         MusicPlayer.onSongEnded.add(async (song : Song) => {
-            if(song.length > 0) return;
+            if(song.length > 0 || song.title != "Russion roulette") return;
             if(MusicPlayer.vc == null) return;
 
             if(this.isRunning){
