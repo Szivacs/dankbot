@@ -12,7 +12,7 @@ export default class FityiCommand implements Command{
             name: "name",
             description: "The name of the sound effect. Type list to display all",
             optional: true,
-            continous: false,
+            continous: true,
         }
     ];
 
@@ -64,10 +64,15 @@ export default class FityiCommand implements Command{
             messages = await fc.messages.fetch({ limit: 50, before: messages.last().id });
         }
         console.log(`[FITYI] Sound effects loaded.`);
-        console.log(this.sounds);
     }
 
     async run(msg : Discord.Message, props : CommandProperties){
+
+        if(props.options.has("r") || props.options.has("reload")){
+            this.sounds.clear();
+            this.init();
+            return;
+        }
 
         if(props.args[0] == "list"){
             let str = ":loud_sound: Available sound effects:\n";
