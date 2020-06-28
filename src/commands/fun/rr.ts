@@ -3,6 +3,7 @@ import { MusicPlayer, MusicService, Song } from '../../services/music'
 import Discord from 'discord.js';
 import Validation from '../../util/validation';
 import * as Util from '../../util/util'
+import { dankbot } from '../../bot';
 
 export default class RussianRouletteCommand implements Command{
     command = "rr";
@@ -78,6 +79,12 @@ export default class RussianRouletteCommand implements Command{
                 }
                 this.isRunning = true;
             }, 1000);
+        });
+
+        dankbot.on("voiceStateUpdate", (before : Discord.VoiceState, after : Discord.VoiceState) => {
+            if(after.member.id == dankbot.user.id && after.channel == null){
+                this.isRunning = false;
+            }
         });
     }
 

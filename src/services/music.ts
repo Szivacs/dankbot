@@ -274,9 +274,10 @@ export class MusicPlayer {
         });
 
         console.log(`[MUSIC] Playing '${song.title}' from '${song.src[0]}'`);
-        dankbot.user.setActivity(`${song.title} by ${song.author}`, { type: 'PLAYING' });
-        if(song.length > 0)
+        if(song.length > 0){
             this.printSong(song, this.tc);
+            dankbot.user.setActivity(`${song.title} by ${song.author}`, { type: 'PLAYING' });
+        }
     }
     static playInterrupted(song : Song) {
         if(this.currentSong != null){
