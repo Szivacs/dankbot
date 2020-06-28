@@ -2,9 +2,6 @@ import { Command, CommandArgument, CommandProperties } from '../../services/comm
 import { MusicPlayer, MusicService } from '../../services/music'
 import Discord from 'discord.js';
 import { dankbot } from '../../bot'
-import * as fs from 'fs';
-import { exec } from 'child_process';
-import { stdout } from 'process';
 
 export default class FityiCommand implements Command{
     command = "fityi";
@@ -19,47 +16,62 @@ export default class FityiCommand implements Command{
         }
     ];
 
-    sounds : {[key : string] : string} = {};
+    sounds : Map<string, string>;
 
     constructor() {
+        this.sounds = new Map();
         dankbot.on("message", (msg : Discord.Message) => {
             if((msg.channel as Discord.TextChannel).name == "fityieffects"){
                 msg.attachments.each((attachment : Discord.MessageAttachment) => {
-                    console.log(`[FITYI] Downloading sound effect from '${attachment.url}'`);
-                    let file = attachment.url.match(/\/([^\/]+)$/)[1];
-                    if(file == null){
-                        console.log("[FITYI] Could not get file name");
-                        msg.channel.send("<:fityi2:415547937523892234> Could not get file name...");
+                    let file = msg.content;
+                    if(file.length == 0){
+                        let filename = attachment.url.match(/\/([^\/]+)$/)[1];
+                        if(filename != null)
+                            file = filename.replace(/\.[^\.]+$/, "");
+                    }
+                    if(file == null || file.length == 0){
+                        console.log(`[FITYI] Could not get file name from '${attachment.url}'`);
                         return;
                     }
-                    file = file.replace(/\..+$/, "");
-                    exec(`ffmpeg -i ${attachment.url} -filter:a "volume=5.0" ./assets/sfx/fityi/${file}.mp3`, (err, stdout, stderr) => {
-                        if(err){
-                            console.error(err);
-                            return;
-                        }
-                        console.log(`[FITYI] Download complete`);
-                        msg.channel.send(`<:fityi2:415547937523892234> Sound effect added with the name ${file}`);
-                        this.sounds[file] = "./assets/sfx/fityi/" + file + ".mp3";
-                    });
+                    this.sounds.set(file, attachment.url);
+                    console.log(`[FITYI] Sound effect added`);
+                    msg.channel.send(`<:fityi2:415547937523892234> Sound effect added with the name ${file}`);
                 });
             }
         });
+        this.init();
+    }
 
-        for(let file of fs.readdirSync("./assets/sfx/fityi/")){
-            let name = file.replace(/\..+$/, "");
-            this.sounds[name] = "./assets/sfx/fityi/" + file;
+    async init(){
+        let fc = await dankbot.channels.fetch("696769253231296532") as Discord.TextChannel;
+        let messages = await fc.messages.fetch({ limit: 50 });
+        while(messages.size > 0){
+            messages.forEach((msg : Discord.Message) => {
+                msg.attachments.each((attachment : Discord.MessageAttachment) => {
+                    let file = msg.content;
+                    if(file.length == 0){
+                        let filename = attachment.url.match(/\/([^\/]+)$/)[1];
+                        if(filename != null)
+                            file = filename.replace(/\.[^\.]+$/, "");
+                    }
+                    if(file == null || file.length == 0){
+                        console.log(`[FITYI] Could not get file name from '${attachment.url}'`);
+                        return;
+                    }
+                    this.sounds.set(file, attachment.url);
+                });
+            });
+            messages = await fc.messages.fetch({ limit: 50, before: messages.last().id });
         }
+        console.log(`[FITYI] Sound effects loaded.`);
+        console.log(this.sounds);
     }
 
     async run(msg : Discord.Message, props : CommandProperties){
 
         if(props.args[0] == "list"){
-            let str = ":loud_sound: Available sound effects: \n";
-            for(let name in this.sounds){
-                str += `${name}, `;
-            }
-            msg.channel.send(str.substring(0, str.length-2), {split: true});
+            let str = ":loud_sound: Available sound effects:\n";
+            msg.channel.send(str + Array.from(this.sounds.keys()).join(", "), {split: true});
             return;
         }
 
@@ -68,7 +80,7 @@ export default class FityiCommand implements Command{
             let values = Object.values(this.sounds);
             sfx = values[Math.floor(Math.random() * values.length)];
         }else{
-            sfx = this.sounds[props.args[0]];
+            sfx = this.sounds.get(props.args[0]);
         }
         if(sfx == null){
             msg.channel.send(":interrobang: This sound effect is not in the list");

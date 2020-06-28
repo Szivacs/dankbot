@@ -25,10 +25,10 @@ export class DankBot extends Discord.Client{
 
         console.log("Starting client");
 
-        this.commands = new CommandService();
         this.settings = JSON.parse(fs.readFileSync("settings.json").toString());
 
         this.on("ready", () => {
+            this.commands = new CommandService();
             console.log("Client ready");
             this.user.setActivity("with a 🐌", {type: "PLAYING"});
 
